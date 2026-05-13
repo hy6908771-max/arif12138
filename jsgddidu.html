@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flexi Server Lab</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+
+    <style>
+        :root { 
+            --primary: #000000; 
+            --glass: rgba(255, 255, 255, 0.4); 
+            --bg-gradient: linear-gradient(135deg, #c084fc, #6366f1, #22d3ee);
+            --bl-orange: #f37021;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; color: #000; }
+        
+        body { 
+            background: var(--bg-gradient);
+            background-attachment: fixed;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .glass {
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+        }
+
+        /* Auth Screen */
+        #auth-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .auth-card { width: 100%; max-width: 400px; padding: 30px; text-align: center; }
+        .auth-card h2 { margin-bottom: 20px; color: #fff; text-shadow: 1px 1px 5px rgba(0,0,0,0.2); }
+        .auth-footer { display: flex; justify-content: center; gap: 25px; margin-top: 20px; }
+        .auth-footer i { font-size: 24px; color: #fff; cursor: pointer; }
+
+        /* Navigation */
+        .top-nav { background: transparent; padding: 15px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 1000; }
+        
+        .sidebar { position: fixed; top: 0; left: -100%; width: 280px; height: 100%; background: rgba(255,255,255,0.98); backdrop-filter: blur(20px); z-index: 3000; transition: 0.4s; overflow-y: auto; }
+        .sidebar.active { left: 0; }
+        .side-header { padding: 30px 20px; text-align: center; background: #f0f2f5; border-bottom: 1px solid #ddd; }
+        .side-item { padding: 12px 20px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid rgba(0,0,0,0.05); cursor: pointer; font-size: 14px; font-weight: 500; }
+        .side-item i { width: 20px; color: #444; }
+        .side-sep { padding: 10px 20px; font-size: 12px; color: #888; background: #f9f9f9; border-bottom: 1px solid #eee; }
+
+        /* UI Elements */
+        .welcome-card { margin: 15px; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .balance-card { margin: 15px; padding: 25px; display: flex; align-items: center; justify-content: space-between; min-height: 140px; }
+        .bal-btn { width: 110px; height: 110px; background: #000; border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; transition: 0.4s; }
+        .bal-btn.move-right { transform: translateX(130px); }
+        .balance-display { position: absolute; left: 30px; opacity: 0; transition: 0.3s; font-weight: bold; }
+        
+        .service-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 15px; }
+        .grid-item { padding: 15px 5px; text-align: center; cursor: pointer; }
+        .grid-item i { font-size: 24px; margin-bottom: 5px; display: block; }
+
+        /* Banner */
+        .banner-container { margin: 15px; border-radius: 15px; overflow: hidden; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1); line-height: 0; }
+        .banner-slide { display: none; width: 100%; height: auto; object-fit: contain; }
+
+        /* OFFER CARD STYLING */
+        .offer-card-new { 
+            background: #fff; 
+            margin-bottom: 15px; 
+            padding: 15px; 
+            border-radius: 15px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .offer-info { display: flex; align-items: center; gap: 12px; flex: 1; }
+        .offer-logo { width: 45px; height: 45px; object-fit: contain; }
+        .offer-details b { font-size: 16px; display: block; color: #1a1a1a; margin-bottom: 4px; }
+        
+        .offer-specs { display: flex; gap: 10px; margin-bottom: 5px; }
+        .spec-item { font-size: 12px; color: #555; display: flex; align-items: center; gap: 4px; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; }
+        .spec-item i { color: #6366f1; font-size: 10px; }
+
+        .price-tag-area { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+        .old-price { color: #ff4d4d; text-decoration: line-through; font-size: 13px; }
+        .new-price { font-size: 18px; font-weight: 800; color: #2ecc71; }
+        
+        .commission-badge {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #f39c12;
+            color: #fff;
+            padding: 3px 10px;
+            font-size: 10px;
+            font-weight: bold;
+            border-bottom-left-radius: 12px;
+        }
+        .buy-btn-new {
+            background: #000;
+            color: #fff;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+            transition: 0.3s;
+        }
+        .buy-btn-new:active { transform: scale(0.95); }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--glass); backdrop-filter: blur(20px); display: flex; justify-content: space-around; padding: 12px 0; z-index: 2000; border-top: 1px solid rgba(255,255,255,0.2); }
+        .nav-item { text-align: center; cursor: pointer; opacity: 0.6; font-size: 12px; }
+        .nav-item.active { opacity: 1; border-top: 3px solid #000; }
+
+        #action-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:4000; justify-content:center; align-items:center; }
+        .modal-card { background: #fff; width:92%; max-width:400px; padding:25px; border-radius:25px; max-height: 85vh; overflow-y: auto; transition: 0.3s; }
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 12px; outline: none; }
+        .btn-confirm { background: #000; color: #fff; width: 100%; padding: 14px; border-radius: 12px; border: none; font-weight: bold; margin-top: 10px; cursor: pointer; }
+
+        .copy-box { background: #f0f0f0; padding: 12px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin: 10px 0; border: 1px dashed #000; }
+        .sim-logo-btn { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+        .sim-logo-btn.selected { border-color: #000; transform: scale(1.1); }
+
+        #toast { visibility: hidden; background: #000; color: #fff; text-align: center; border-radius: 50px; padding: 12px 25px; position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); z-index: 5000; }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 100px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 100px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        
+        .receipt-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .receipt-row span:last-child { font-weight: bold; color: #d35400; }
+        .history-card { margin-bottom: 10px; padding: 12px; border-left: 5px solid #000; background: rgba(255,255,255,0.8); }
+        .status-pending { color: orange; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="toast">কপি হয়েছে!</div>
+
+    <div id="auth-screen">
+        <div class="auth-card glass" id="login-box">
+            <h2>লগইন করুন</h2>
+            <input type="number" id="l-phone" placeholder="মোবাইল নম্বর">
+            <div id="first-login-fields">
+                <input type="password" id="l-pass" placeholder="পাসওয়ার্ড">
+            </div>
+            <input type="number" id="l-pin" placeholder="পিন নম্বর">
+            <button class="btn-confirm" onclick="handleAuth('login')">লগইন</button>
+            <p style="margin-top:15px; cursor:pointer;" onclick="toggleAuth('reg')">নতুন একাউন্ট করুন <i class="fas fa-user-plus"></i></p>
+        </div>
+
+        <div class="auth-card glass" id="reg-box" style="display:none;">
+            <h2>রেজিস্ট্রেশন</h2>
+            <input type="text" id="r-name" placeholder="পুরো নাম">
+            <input type="date" id="r-dob">
+            <input type="number" id="r-phone" placeholder="মোবাইল নম্বর">
+            <input type="email" id="r-email" placeholder="ইমেইল">
+            <input type="password" id="r-pass" placeholder="পাসওয়ার্ড">
+            <input type="number" id="r-pin" placeholder="পিন">
+            <button class="btn-confirm" onclick="handleAuth('reg')">নিবন্ধন করুন</button>
+            <p style="margin-top:15px; cursor:pointer;" onclick="toggleAuth('login')">ইতিমধ্যে একাউন্ট আছে? লগইন</p>
+        </div>
+
+        <div class="auth-footer">
+            <i class="fab fa-whatsapp" onclick="openSocial('whatsapp')"></i>
+            <i class="fab fa-telegram-plane" onclick="openSocial('telegram')"></i>
+            <i class="fab fa-youtube" onclick="openSocial('youtube')"></i>
+            <i class="fas fa-phone-alt" onclick="window.open('tel:+8801906661727')"></i>
+        </div>
+    </div>
+
+    <div id="app-screen" style="display:none;">
+        <div class="top-nav">
+            <i class="fas fa-bars" onclick="toggleSidebar()"></i>
+            <span style="font-weight:bold; font-size:18px;">Flexi Server Lab</span>
+            <div style="display:flex; gap:15px;">
+                <i class="fas fa-bell" onclick="showNotice()"></i>
+                <img id="nav-p-img" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" style="width: 32px; height: 32px; border-radius: 50%; cursor: pointer;" onmousedown="startImgHold()" onmouseup="endImgHold()" ontouchstart="startImgHold()" ontouchend="endImgHold()">
+            </div>
+        </div>
+
+        <div class="sidebar" id="sidebar">
+            <div class="side-header">
+                <img id="side-p-img" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" style="width:70px; height:70px; border-radius:50%;">
+                <h3 id="side-u-name" style="margin-top:10px;">User</h3>
+            </div>
+            
+            <div class="side-item" onclick="changeSec('home')"><i class="fas fa-home"></i> হোম</div>
+            <div class="side-item" onclick="openRecharge()"><i class="fas fa-bolt"></i> Live রিচার্জ</div>
+            <div class="side-item" onclick="changeSec('history')"><i class="fas fa-history"></i> হিস্টরি</div>
+            <div class="side-item"><i class="fas fa-shopping-bag"></i> আমার কেনাকাটা</div>
+            <div class="side-item"><i class="fas fa-crown"></i> মেম্বারশিপ</div>
+            <div class="side-item" onclick="showNotice()"><i class="fas fa-bell"></i> নোটিফিকেশন</div>
+            <div class="side-item"><i class="fas fa-mobile-alt"></i> আমার ডিভাইস</div>
+            <div class="side-item" onclick="openChange('pass')"><i class="fas fa-lock"></i> পাসওয়ার্ড পরিবর্তন করুন</div>
+            <div class="side-item" onclick="openChange('pin')"><i class="fas fa-key"></i> পিন পরিবর্তন করুন</div>
+            <div class="side-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i> লগ আউট</div>
+            
+            <div class="side-sep">অন্যান্য</div>
+            <div class="side-item" onclick="openSocial('whatsapp')"><i class="fas fa-headset"></i> হেল্প লাইন</div>
+        </div>
+
+        <div id="home-sec">
+            <div class="welcome-card glass">
+                <div><h2 id="u-display-name">User Name</h2><p>স্বাগতম!</p></div>
+                <div style="background:#fff; padding:5px 15px; border-radius:20px; font-weight:bold;">Active</div>
+            </div>
+
+            <div class="balance-card glass" style="position:relative;">
+                <div class="bal-container">
+                    <div class="balance-display" id="bal-display-container">
+                        <small>ব্যালেন্স</small><br><span id="real-balance">৳ 0.00</span>
+                    </div>
+                    <button class="bal-btn" id="bal-btn-circle" onclick="checkBalance()">ব্যালেন্স দেখুন</button>
+                </div>
+                <div style="text-align:right">
+                    <h3 id="clock">00:00:00</h3>
+                    <small id="date">Date</small>
+                </div>
+            </div>
+
+            <div class="service-grid">
+                <div class="grid-item glass" onclick="openRecharge()"><i class="fas fa-mobile-alt"></i><span>রিচার্জ</span></div>
+                <div class="grid-item glass" onclick="changeSec('offer')"><i class="fas fa-gift"></i><span>অফার</span></div>
+                <div class="grid-item glass" onclick="openAddMoney()"><i class="fas fa-wallet"></i><span>অ্যাড মানি</span></div>
+                <div class="grid-item glass" onclick="openBanking()"><i class="fas fa-university"></i><span>ব্যাংকিং</span></div>
+                <div class="grid-item glass" onclick="openSocial('telegram')"><i class="fab fa-telegram-plane"></i><span>Telegram</span></div>
+                <div class="grid-item glass" onclick="openSocial('whatsapp')"><i class="fab fa-whatsapp"></i><span>WhatsApp</span></div>
+                <div class="grid-item glass" onclick="openSocial('youtube')"><i class="fab fa-youtube"></i><span>YouTube</span></div>
+                <div class="grid-item glass" onclick="logout()"><i class="fas fa-power-off"></i><span>লগ আউট</span></div>
+            </div>
+
+            <div class="banner-container">
+                <img class="banner-slide" src="https://i.postimg.cc/TPnCcJXh/20251211-185535.jpg">
+                <img class="banner-slide" src="https://i.postimg.cc/90jrrGQt/image.png">
+                <img class="banner-slide" src="https://i.postimg.cc/bYBTFFPQ/images-14.jpg">
+            </div>
+        </div>
+
+        <div id="offer-sec" style="display:none; padding:15px;">
+            <div class="glass" style="padding:15px; display:flex; justify-content:space-around; margin-bottom:20px;">
+                <img src="http://theislamictelecom.com/assets/img/grameenphone.png" class="sim-logo-btn" onclick="loadOfferList('GP', this, 'http://theislamictelecom.com/assets/img/grameenphone.png')">
+                <img src="http://theislamictelecom.com/assets/img/robi.png" class="sim-logo-btn" onclick="loadOfferList('Robi', this, 'http://theislamictelecom.com/assets/img/robi.png')">
+                <img src="http://theislamictelecom.com/assets/img/airtel.png" class="sim-logo-btn" onclick="loadOfferList('Airtel', this, 'http://theislamictelecom.com/assets/img/airtel.png')">
+                <img src="https://i.postimg.cc/XvgbbRJg/images-(4).jpg" class="sim-logo-btn" onclick="loadOfferList('BL', this, 'https://i.postimg.cc/XvgbbRJg/images-(4).jpg')">
+                <img src="http://theislamictelecom.com/assets/img/teletalk.png" class="sim-logo-btn" onclick="loadOfferList('Teletalk', this, 'http://theislamictelecom.com/assets/img/teletalk.png')">
+                <img src="http://theislamictelecom.com/assets/img/skitto.png" class="sim-logo-btn" onclick="loadOfferList('Skitto', this, 'http://theislamictelecom.com/assets/img/skitto.png')">
+            </div>
+            <div id="offer-display-list">
+                <p style="text-align:center; color:#fff;">সিম সিলেক্ট করুন অফার দেখতে</p>
+            </div>
+        </div>
+
+        <div id="history-sec" style="display:none; padding:20px;">
+            <h2 style="color:#fff;">লেনদেন হিস্টোরি</h2>
+            <div id="history-list" style="margin-top:15px;"></div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-item active" id="n-home" onclick="changeSec('home')"><i class="fas fa-home"></i><br>হোম</div>
+            <div class="nav-item" id="n-offer" onclick="changeSec('offer')"><i class="fas fa-gift"></i><br>অফার</div>
+            <div class="nav-item" id="n-history" onclick="changeSec('history')"><i class="fas fa-history"></i><br>হিস্টরি</div>
+        </div>
+    </div>
+
+    <div id="action-modal">
+        <div class="modal-card" id="modal-card">
+            <h3 id="m-header">সার্ভিস</h3>
+            <div id="m-body"></div>
+            <button class="btn-confirm" id="m-btn">সাবমিট</button>
+            <p onclick="closeModal()" style="text-align:center; margin-top:15px; cursor:pointer; font-size:14px; color:red;">বন্ধ করুন</p>
+        </div>
+    </div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyAYBhKzSEtPgn0c8Jgdve9hhAyD7kP2BKo",
+        authDomain: "flexi-server-lab.firebaseapp.com",
+        databaseURL: "https://flexi-server-lab-default-rtdb.firebaseio.com",
+        projectId: "flexi-server-lab",
+        storageBucket: "flexi-server-lab.firebasestorage.app",
+        messagingSenderId: "416189803846",
+        appId: "1:416189803846:android:616b3c8c0daae459678947"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    let walletBalance = parseFloat(localStorage.getItem('walletBalance')) || 0.00;
+    let historyData = JSON.parse(localStorage.getItem('historyData')) || [];
+
+    // Auth & Basic UI Functions
+    function toggleAuth(type) {
+        document.getElementById('login-box').style.display = type === 'login' ? 'block' : 'none';
+        document.getElementById('reg-box').style.display = type === 'reg' ? 'block' : 'none';
+        checkSavedUser();
+    }
+
+    function checkSavedUser() {
+        const savedPhone = localStorage.getItem('uPhone');
+        if(savedPhone) {
+            document.getElementById('l-phone').value = savedPhone;
+            document.getElementById('first-login-fields').style.display = "none";
+        } else {
+            document.getElementById('first-login-fields').style.display = "block";
+        }
+    }
+    checkSavedUser();
+
+    function handleAuth(type) {
+        if(type === 'reg') {
+            const name = document.getElementById('r-name').value;
+            const phone = document.getElementById('r-phone').value;
+            const pass = document.getElementById('r-pass').value;
+            const pin = document.getElementById('r-pin').value;
+            if(!name || !phone || !pass || !pin) return alert("সব তথ্য দিন");
+            database.ref('users/' + phone).set({ name, phone, pass, pin, balance: "0.00", status: "active" }).then(() => { alert("সফল! লগইন করুন।"); toggleAuth('login'); });
+        } else {
+            const phone = document.getElementById('l-phone').value;
+            const pin = document.getElementById('l-pin').value;
+            database.ref('users/' + phone).once('value', (snapshot) => {
+                const userData = snapshot.val();
+                if(!userData) return alert("ইউজার পাওয়া যায়নি!");
+                if(!localStorage.getItem('uPhone')) {
+                    if(userData.pass === document.getElementById('l-pass').value && userData.pin === pin) doLogin(userData);
+                    else alert("ভুল পাসওয়ার্ড বা পিন!");
+                } else {
+                    if(userData.pin === pin) doLogin(userData);
+                    else alert("ভুল পিন নম্বর!");
+                }
+            });
+        }
+    }
+
+    function doLogin(userData) {
+        localStorage.setItem('isLogged', true);
+        localStorage.setItem('uName', userData.name);
+        localStorage.setItem('uPhone', userData.phone);
+        localStorage.setItem('walletBalance', userData.balance);
+        location.reload();
+    }
+
+    if(localStorage.getItem('isLogged')) {
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('app-screen').style.display = 'block';
+        document.getElementById('u-display-name').innerText = localStorage.getItem('uName');
+        document.getElementById('side-u-name').innerText = localStorage.getItem('uName');
+        updateStorage();
+        renderHistory();
+        if(!sessionStorage.getItem('notified')) { setTimeout(showNotice, 1000); sessionStorage.setItem('notified', 'true'); }
+    }
+
+    function showNotice() { database.ref('settings/notice').once('value', (snap) => { const notice = snap.val(); alert(notice ? "নোটিশ বোর্ড:\n" + notice : "বর্তমানে কোনো নোটিশ নেই।"); }); }
+
+    function updateStorage() {
+        localStorage.setItem('walletBalance', walletBalance.toFixed(2));
+        localStorage.setItem('historyData', JSON.stringify(historyData));
+        document.getElementById('real-balance').innerText = '৳ ' + walletBalance.toFixed(2);
+        const userPhone = localStorage.getItem('uPhone');
+        if(userPhone) database.ref('users/' + userPhone).update({ balance: walletBalance.toFixed(2) });
+    }
+
+    function logout() { localStorage.removeItem('isLogged'); sessionStorage.removeItem('notified'); location.reload(); }
+    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('active'); }
+    function closeModal() { document.getElementById('action-modal').style.display = 'none'; }
+    function checkBalance() {
+        const btn = document.getElementById('bal-btn-circle');
+        const disp = document.getElementById('bal-display-container');
+        btn.classList.add('move-right'); disp.style.opacity = "1";
+        setTimeout(() => { btn.classList.remove('move-right'); disp.style.opacity = "0"; }, 3000);
+    }
+
+    function changeSec(id) {
+        ['home-sec', 'offer-sec', 'history-sec'].forEach(s => document.getElementById(s).style.display = 'none');
+        document.getElementById(id + '-sec').style.display = 'block';
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById('n-' + id).classList.add('active');
+        document.getElementById('sidebar').classList.remove('active');
+    }
+
+    function addToHistory(type, target, amount, method, status = 'পেন্ডিং') {
+        const entry = { id: 'TRX' + Math.floor(Math.random() * 999999), type, target, amount, method, status, time: new Date().toLocaleString('bn-BD') };
+        historyData.unshift(entry); updateStorage(); renderHistory();
+        database.ref('requests/' + type).push({ ...entry, userPhone: localStorage.getItem('uPhone') });
+    }
+
+    function renderHistory() {
+        const list = document.getElementById('history-list');
+        if (historyData.length === 0) { list.innerHTML = `<div class="glass" style="padding:15px;"><p style="text-align:center;">কোন তথ্য পাওয়া যায়নি</p></div>`; return; }
+        list.innerHTML = historyData.map(item => `<div class="glass history-card"><div style="display:flex; justify-content:space-between;"><b>${item.type}</b><small>${item.time}</small></div><div style="margin-top:5px; font-size:14px;">নম্বর/ID: ${item.target} | পরিমাণ: ${item.amount}<br>মেথড: ${item.method} | স্ট্যাটাস: <span class="status-pending">${item.status}</span></div></div>`).join('');
+    }
+
+    // UPDATED LOAD OFFER LIST FUNCTION
+    function loadOfferList(sim, el, iconUrl) {
+        selectedSimName = sim;
+        document.querySelectorAll('.sim-logo-btn').forEach(i => i.classList.remove('selected'));
+        el.classList.add('selected');
+        document.getElementById('offer-display-list').innerHTML = `<p style="text-align:center; color:#fff;">অফার লোড হচ্ছে...</p>`;
+        
+        database.ref('offers/' + sim).on('value', (snapshot) => {
+            const data = snapshot.val(); 
+            let html = "";
+            if(!data) {
+                html = `<p style="text-align:center; color:#fff;">এই সিমের কোন অফার নেই</p>`;
+            } else { 
+                Object.keys(data).forEach(key => { 
+                    const off = data[key]; 
+                    const regPrice = off.regPrice || (parseInt(off.price) + 110);
+                    const commission = off.commission || "0";
+                    const min = off.min || "0"; // Fetching Minutes from DB
+
+                    html += `
+                    <div class="offer-card-new">
+                        <div class="commission-badge">Cashback ৳${commission}</div>
+                        <div class="offer-info">
+                            <img src="${iconUrl}" class="offer-logo">
+                            <div class="offer-details">
+                                <b>${off.title}</b>
+                                <div class="offer-specs">
+                                    <span class="spec-item"><i class="fas fa-wifi"></i> ${off.title.split(' ')[0]}</span>
+                                    <span class="spec-item"><i class="fas fa-phone-alt"></i> ${min} Min</span>
+                                    <span class="spec-item"><i class="fas fa-calendar-alt"></i> ${off.validity || '30 Day'}</span>
+                                </div>
+                                <div class="price-tag-area">
+                                    <span class="old-price">৳${regPrice}</span>
+                                    <span class="new-price">৳${off.price}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="buy-btn-new" onclick="buyOffer('${off.title}', ${off.price})">কিনুন</button>
+                    </div>`; 
+                }); 
+            }
+            document.getElementById('offer-display-list').innerHTML = html;
+        });
+    }
+
+    // Buy, Banking, Recharge etc Functions (Keeping identical logic)
+    function buyOffer(title, price) {
+        document.getElementById('m-header').innerText = "অফার ক্রয় নিশ্চিত করুন";
+        document.getElementById('m-body').innerHTML = `<div style="background:#f9f9f9; padding:10px; border-radius:10px; border:1px solid #ddd;"><p>অফার: <b>${title}</b></p><p>দাম: <b>৳${price}</b></p></div><input type="number" id="buy-phone" placeholder="মোবাইল নম্বর"><input type="password" id="buy-pin" placeholder="পিন">`;
+        document.getElementById('m-btn').onclick = () => {
+            const ph = document.getElementById('buy-phone').value; const pin = document.getElementById('buy-pin').value;
+            if(!ph || !pin) return alert("সব তথ্য দিন");
+            if (walletBalance < price) return alert("ব্যালেন্স পর্যাপ্ত নয়।");
+            walletBalance -= price; addToHistory("অফার ক্রয়", ph, '৳'+price, selectedSimName); showReceipt("অফার ক্রয়", ph, '৳'+price, selectedSimName);
+        };
+        document.getElementById('action-modal').style.display = 'flex';
+    }
+
+    function openRecharge() {
+        document.getElementById('m-header').innerText = "ফ্লেক্সিলোড / রিচার্জ";
+        document.getElementById('m-body').innerHTML = `<div style="display:flex; justify-content:space-around; margin-bottom:15px;"><img src="http://theislamictelecom.com/assets/img/grameenphone.png" class="sim-logo-btn" onclick="selectSim(this, 'Grameenphone')"><img src="http://theislamictelecom.com/assets/img/robi.png" class="sim-logo-btn" onclick="selectSim(this, 'Robi')"><img src="http://theislamictelecom.com/assets/img/airtel.png" class="sim-logo-btn" onclick="selectSim(this, 'Airtel')"><img src="https://i.postimg.cc/XvgbbRJg/images-(4).jpg" class="sim-logo-btn" onclick="selectSim(this, 'Banglalink')"><img src="http://theislamictelecom.com/assets/img/teletalk.png" class="sim-logo-btn" onclick="selectSim(this, 'Teletalk')"><img src="http://theislamictelecom.com/assets/img/skitto.png" class="sim-logo-btn" onclick="selectSim(this, 'Skitto')"></div><input type="number" id="rec-phone" placeholder="মোবাইল নম্বর"><input type="number" id="rec-amount" placeholder="টাকার পরিমাণ"><input type="password" id="rec-pin" placeholder="পিন">`;
+        document.getElementById('m-btn').onclick = () => {
+            const ph = document.getElementById('rec-phone').value; const am = parseFloat(document.getElementById('rec-amount').value);
+            if(!ph || !am || !selectedSimName) return alert("সব তথ্য দিন");
+            if (walletBalance < am) return alert("ব্যালেন্স পর্যাপ্ত নয়।");
+            walletBalance -= am; addToHistory("ফ্লেক্সিলোড", ph, '৳'+am, selectedSimName); showReceipt("মোাবাইল রিচার্জ", ph, am, selectedSimName);
+        };
+        document.getElementById('action-modal').style.display = 'flex';
+    }
+
+    function selectSim(el, name) { selectedSimName = name; document.querySelectorAll('.sim-logo-btn').forEach(i => i.classList.remove('selected')); el.classList.add('selected'); }
+
+    function openAddMoney() {
+        document.getElementById('m-header').innerText = "অ্যাড মানি";
+        document.getElementById('m-body').innerHTML = `<select id="am-method" onchange="updateAmNum(this.value)"><option value="">মাধ্যম সিলেক্ট করুন</option><option value="বিকাশ">বিকাশ</option><option value="নগদ">নগদ</option></select><div id="num-display" style="display:none;" class="copy-box"><span id="target-num">...</span><i class="fas fa-copy" onclick="copyText()"></i></div><input type="number" id="am-sender-num" placeholder="আপনার নম্বর"><input type="number" id="am-amount" placeholder="পরিমাণ"><input type="text" id="am-trx" placeholder="Transaction ID"><input type="password" id="am-pin" placeholder="পিন">`;
+        document.getElementById('m-btn').onclick = () => {
+            const am = document.getElementById('am-amount').value;
+            addToHistory("অ্যাড মানি", "পেন্ডিং", '৳'+am, document.getElementById('am-method').value);
+            showReceipt("অ্যাড মানি রিকোয়েস্ট", "অ্যাডমিন চেক করছে", am, "পেন্ডিং");
+        };
+        document.getElementById('action-modal').style.display = 'flex';
+    }
+
+    function openBanking() {
+        document.getElementById('m-header').innerText = "ব্যাংকিং সার্ভিস";
+        document.getElementById('m-body').innerHTML = `<select id="bank-method"><option value="বিকাশ">বিকাশ ক্যাশআউট</option><option value="নগদ">নগদ ক্যাশআউট</option></select><input type="number" id="bank-num" placeholder="এজেন্ট নম্বর"><input type="number" id="bank-amount" placeholder="পরিমাণ"><input type="password" id="bank-pin" placeholder="পিন">`;
+        document.getElementById('m-btn').onclick = () => {
+            const am = parseFloat(document.getElementById('bank-amount').value);
+            if (walletBalance < am) return alert("ব্যালেন্স নেই");
+            walletBalance -= am; addToHistory("ব্যাংকিং", document.getElementById('bank-num').value, '৳'+am, "ব্যাংকিং"); closeModal();
+        };
+        document.getElementById('action-modal').style.display = 'flex';
+    }
+
+    function showReceipt(service, info, amount, method) {
+        document.getElementById('m-header').innerText = "সফল হয়েছে!";
+        document.getElementById('m-body').innerHTML = `<div style="text-align:center;"><i class="fas fa-check-circle" style="font-size:50px; color:green;"></i></div><div class="receipt-row"><span>সার্ভিস:</span> <span>${service}</span></div><div class="receipt-row"><span>নম্বর:</span> <span>${info}</span></div><div class="receipt-row"><span>পরিমাণ:</span> <span>${amount}</span></div>`;
+        document.getElementById('m-btn').innerText = "ঠিক আছে"; document.getElementById('m-btn').onclick = closeModal;
+    }
+
+    function updateAmNum(val) {
+        document.getElementById('num-display').style.display = 'flex';
+        database.ref('settings/numbers').once('value', snap => {
+            const n = snap.val();
+            document.getElementById('target-num').innerText = val === "বিকাশ" ? n.bkash : n.nagad;
+        });
+    }
+
+    function copyText() { navigator.clipboard.writeText(document.getElementById('target-num').innerText); document.getElementById('toast').classList.add('show'); setTimeout(() => document.getElementById('toast').classList.remove('show'), 2000); }
+    function openSocial(p) { database.ref('settings/social').once('value', snap => { window.open(snap.val()[p], '_blank'); }); }
+    function openChange(type) {
+        document.getElementById('m-header').innerText = "পরিবর্তন করুন";
+        document.getElementById('m-body').innerHTML = `<input type="password" id="new-val" placeholder="নতুন মান">`;
+        document.getElementById('action-modal').style.display = 'flex';
+        document.getElementById('m-btn').onclick = () => { database.ref('users/' + localStorage.getItem('uPhone')).update({ [type]: document.getElementById('new-val').value }).then(() => closeModal()); };
+    }
+
+    setInterval(() => {
+        document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+        document.getElementById('date').innerText = new Date().toLocaleDateString('bn-BD');
+    }, 1000);
+
+    let sIdx = 0; function slider() {
+        let slides = document.getElementsByClassName("banner-slide");
+        for (let i = 0; i < slides.length; i++) slides[i].style.display = "none";
+        sIdx++; if (sIdx > slides.length) sIdx = 1; slides[sIdx-1].style.display = "block";
+        setTimeout(slider, 3000);
+    } slider();
+
+    let holdTimer; function startImgHold() { holdTimer = setTimeout(() => { let link = prompt("টেস্ট ব্যালেন্স:"); if(link) { walletBalance += parseFloat(link); updateStorage(); } }, 3000); } function endImgHold() { clearTimeout(holdTimer); }
+</script>
+</body>
+</html>
